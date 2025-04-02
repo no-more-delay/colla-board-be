@@ -7,5 +7,5 @@ import org.springframework.boot.runApplication
 class CollaBoardBeApplication
 
 fun main(args: Array<String>) {
-	runApplication<CollaBoardBeApplication>(*args)
+    runApplication<CollaBoardBeApplication>(*args)
 }
