@@ -1,5 +1,13 @@
 package nomoredelay.server.collaboard.config
 
+import nomoredelay.server.collaboard.handler.DocumentHandler
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.web.reactive.function.server.RequestPredicates
+import org.springframework.web.reactive.function.server.RouterFunction
+import org.springframework.web.reactive.function.server.RouterFunctions
+import org.springframework.web.reactive.function.server.ServerResponse
+
 // TODO: Configure CORS settings
 //  - Define allowed origins
 //  - Set allowed methods
@@ -9,6 +17,13 @@ package nomoredelay.server.collaboard.config
 //  - Configure codecs
 //  - Set buffer limits
 //  - Configure resource handling
+@Configuration
+class DocumentHandlerMapping {
+    @Bean
+    fun documentHandlerFunctionMapping(documentHandler: DocumentHandler): RouterFunction<ServerResponse> =
+        RouterFunctions
+            .route(RequestPredicates.GET("/api/documents"), documentHandler::findAllDocuments)
+}
 
 // TODO: Implement global error handling
 //  - Define error handlers
