@@ -15,7 +15,7 @@ class WebSocketConfig {
     @Bean
     fun registerWebSocketHandlers(documentWebSocketHandler: DocumentWebSocketHandler): HandlerMapping {
         // https://docs.spring.io/spring-framework/reference/web/webflux-websocket.html#when-to-use-websockets
-        val map = mapOf("/ws/document" to DocumentWebSocketHandler())
+        val map = mapOf("/ws/document" to documentWebSocketHandler)
         val order = -1 // before annotated controllers
 
         return SimpleUrlHandlerMapping(map, order)
