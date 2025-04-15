@@ -1,0 +1,69 @@
+<!--
+텍스트 상자에 텍스트를 입력합니다.
+"Generate Update" 버튼을 클릭하면:
+
+입력한 텍스트가 YJS 문서 객체에 적용됩니다.
+YJS는 이 변경사항을 바이너리 업데이트 형식으로 인코딩합니다.
+생성된 업데이트 파일이 yjs_update.bin 이름으로 다운로드됩니다.
+브라우저 콘솔에 바이너리 데이터와 16진수 형태로 변환된 데이터가 출력됩니다.
+
+확인해야 할 사항:
+브라우저 콘솔(F12 또는 우클릭 후 "검사" 선택)에서 로그 출력
+다운로드된 yjs_update.bin 파일 (백엔드 테스트에 사용)
+
+즉 이 형식대로 데이터가 온다고 생각하면 됨
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>YJS Update Generator</title>
+  <script type="module">
+    // 필요한 모든 종속성을 명시적으로 가져오기
+    import * as Y from 'https://cdn.skypack.dev/yjs';
+    import { ObservableV2 } from 'https://cdn.skypack.dev/lib0/observable';
+    
+    // DOM이 로드된 후 실행
+    document.addEventListener('DOMContentLoaded', () => {
+      // YJS 문서 생성
+      const ydoc = new Y.Doc();
+      // 텍스트 타입 생성
+      const ytext = ydoc.getText('editor');
+      
+      // 버튼 클릭 이벤트
+      document.getElementById('generateBtn').addEventListener('click', () => {
+        // 현재 텍스트 가져오기
+        const text = document.getElementById('editor').value;
+        
+        // 텍스트 삽입 (업데이트 생성)
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, text);
+        
+        // 업데이트 생성
+        const update = Y.encodeStateAsUpdate(ydoc);
+        
+        // 업데이트를 파일로 저장
+        const blob = new Blob([update], {type: 'application/octet-stream'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'yjs_update.bin';
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        console.log('Update created and downloaded!');
+        
+        // 콘솔에서 확인용
+        console.log('Update binary data:', update);
+        
+        // 업데이트 데이터를 16진수로 표시
+        console.log('Update hex:', Array.from(update).map(b => b.toString(16).padStart(2, '0')).join(' '));
+      });
+    });
+  </script>
+</head>
+<body>
+  <h1>YJS Update Generator</h1>
+  <button id="generateBtn">Generate Update</button>
+  <textarea id="editor" rows="10" cols="50">테스트 텍스트를 입력하세요</textarea>
+</body>
+</html>
