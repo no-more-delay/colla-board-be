@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>YJS 실시간 협업 테스트</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .status {
+      margin-bottom: 10px;
+      padding: 10px;
+      background-color: #f8f8f8;
+      border-radius: 4px;
+    }
+    .status.connected {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .status.disconnected {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    textarea {
+      width: 100%;
+      height: 300px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 16px;
+      margin-bottom: 10px;
+      resize: vertical;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 8px 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0069d9;
+    }
+    .log {
+      border: 1px solid #ddd;
+      padding: 10px;
+      height: 150px;
+      overflow-y: auto;
+      background-color: #f5f5f5;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .awareness-info {
+      margin-top: 10px;
+      padding: 10px;
+      background-color: #e9f5ff;
+      border-radius: 4px;
+    }
+    .user-cursor {
+      position: absolute;
+      width: 2px;
+      height: 20px;
+      background-color: red;
+      pointer-events: none;
+    }
+    .user-info {
+      position: absolute;
+      background-color: #007bff;
+      color: white;
+      padding: 2px 5px;
+      border-radius: 3px;
+      font-size: 12px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>YJS 실시간 협업 테스트</h1>
+    
+    <div class="controls">
+      <input type="text" id="docId" placeholder="문서 ID" value="test-doc-123">
+      <input type="text" id="username" placeholder="사용자 이름" value="사용자">
+      <button id="connectBtn">연결</button>
+      <button id="disconnectBtn" disabled>연결 해제</button>
+    </div>
+    
+    <div id="status" class="status disconnected">연결 상태: 연결 안됨</div>
+    
+    <div class="awareness-info" id="awarenessInfo">
+      현재 접속자: 없음
+    </div>
+    
+    <textarea id="editor" disabled placeholder="연결 후 편집할 수 있습니다..."></textarea>
+    
+    <h3>이벤트 로그</h3>
+    <div id="log" class="log"></div>
+  </div>
+
+  <script type="module">
+    import * as Y from 'https://cdn.skypack.dev/yjs';
+    import { WebsocketProvider } from 'https://cdn.skypack.dev/y-websocket';
+    import { Awareness } from 'https://cdn.skypack.dev/y-protocols/awareness';
+    
+    // DOM 요소
+    const statusElement = document.getElementById('status');
+    const editorElement = document.getElementById('editor');
+    const logElement = document.getElementById('log');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const docIdInput = document.getElementById('docId');
+    const usernameInput = document.getElementById('username');
+    const awarenessInfoElement = document.getElementById('awarenessInfo');
+    
+    // 전역 변수
+    let ydoc;
+    let provider;
+    let ytext;
+    let awareness;
+    let connected = false;
+    let localUpdateFlag = false;
+    
+    // 로그 함수
+    function log(message) {
+      const now = new Date();
+      const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
+      const logEntry = document.createElement('div');
+      logEntry.textContent = `${timestamp} - ${message}`;
+      logElement.appendChild(logEntry);
+      logElement.scrollTop = logElement.scrollHeight;
+    }
+    
+    // 연결 상태 업데이트
+    function updateStatus(isConnected) {
+      connected = isConnected;
+      if (isConnected) {
+        statusElement.textContent = '연결 상태: 연결됨';
+        statusElement.className = 'status connected';
+        editorElement.disabled = false;
+      } else {
+        statusElement.textContent = '연결 상태: 연결 안됨';
+        statusElement.className = 'status disconnected';
+        editorElement.disabled = true;
+      }
+      connectBtn.disabled = isConnected;
+      disconnectBtn.disabled = !isConnected;
+    }
+    
+    // awareness 정보 업데이트
+    function updateAwarenessInfo() {
+      if (!awareness) {
+        awarenessInfoElement.textContent = '현재 접속자: 없음';
+        return;
+      }
+      
+      const states = awareness.getStates();
+      const users = [];
+      
+      states.forEach((state, clientId) => {
+        if (state.user && state.user.name) {
+          users.push(`${state.user.name} (${clientId})`);
+        } else {
+          users.push(`익명 (${clientId})`);
+        }
+      });
+      
+      if (users.length === 0) {
+        awarenessInfoElement.textContent = '현재 접속자: 없음';
+      } else {
+        awarenessInfoElement.textContent = `현재 접속자: ${users.join(', ')}`;
+      }
+    }
+    
+    // 연결 버튼 클릭
+    connectBtn.addEventListener('click', () => {
+      if (connected) return;
+      
+      const docId = docIdInput.value.trim();
+      const username = usernameInput.value.trim() || '익명';
+      
+      if (!docId) {
+        alert('문서 ID를 입력하세요');
+        return;
+      }
+      
+      try {
+        // YDoc 생성
+        ydoc = new Y.Doc();
+        
+        // 텍스트 타입 생성
+        ytext = ydoc.getText('editor');
+        
+        // WebSocket 서버에 연결
+        const wsUrl = `ws://${window.location.hostname}:8080/ws/document/${docId}`;
+        log(`WebSocket 연결 시도: ${wsUrl}`);
+        
+        provider = new WebsocketProvider(wsUrl, docId, ydoc, {
+          WebSocketPolyfill: WebSocket,
+          connect: true
+        });
+        
+        // awareness 설정
+        awareness = provider.awareness;
+        awareness.setLocalState({
+          user: {
+            name: username,
+            color: '#' + Math.floor(Math.random()*16777215).toString(16) // 랜덤 색상
+          }
+        });
+        
+        // 연결 이벤트
+        provider.on('status', event => {
+          log(`WebSocket 상태 변경: ${event.status}`);
+          updateStatus(event.status === 'connected');
+        });
+        
+        // 연결 성공/에러 이벤트
+        provider.on('connection-error', error => {
+          log(`연결 오류: ${error.message || '알 수 없는 오류'}`);
+          updateStatus(false);
+        });
+        
+        provider.on('connection-close', () => {
+          log('연결이 종료되었습니다');
+          updateStatus(false);
+        });
+        
+        // Awareness 변경 감지
+        awareness.on('change', () => {
+          log('Awareness 변경됨');
+          updateAwarenessInfo();
+        });
+        
+        // 텍스트 변경 관찰
+        ytext.observe(event => {
+          if (localUpdateFlag) return;
+          log(`텍스트 변경됨: ${JSON.stringify(event.changes.delta)}`);
+        });
+        
+        // 초기 에디터 값 설정
+        editorElement.value = ytext.toString();
+        
+        // 에디터 입력 처리
+        editorElement.addEventListener('input', () => {
+          localUpdateFlag = true;
+          const currentPos = editorElement.selectionStart;
+          const currentText = editorElement.value;
+          
+          // YText 업데이트
+          ytext.delete(0, ytext.length);
+          ytext.insert(0, currentText);
+          
+          // 커서 위치 복원
+          editorElement.selectionStart = currentPos;
+          editorElement.selectionEnd = currentPos;
+          localUpdateFlag = false;
+        });
+        
+        // 문서 업데이트 이벤트
+        ydoc.on('update', (update, origin) => {
+          if (origin === provider) {
+            log('원격 업데이트 수신됨');
+          } else {
+            log('로컬 업데이트 발생');
+          }
+        });
+        
+        // 동기화 이벤트
+        ytext.observe(event => {
+          if (!localUpdateFlag) {
+            // 원격 업데이트 처리
+            editorElement.value = ytext.toString();
+            log('텍스트 동기화됨');
+          }
+        });
+        
+        updateStatus(true);
+        
+      } catch (error) {
+        log(`초기화 오류: ${error.message}`);
+        console.error(error);
+      }
+    });
+    
+    // 연결 해제 버튼 클릭
+    disconnectBtn.addEventListener('click', () => {
+      if (!connected) return;
+      
+      log('연결 해제 중...');
+      
+      if (provider) {
+        provider.disconnect();
+        provider.destroy();
+        provider = null;
+      }
+      
+      if (ydoc) {
+        ydoc.destroy();
+        ydoc = null;
+      }
+      
+      ytext = null;
+      awareness = null;
+      editorElement.value = '';
+      
+      updateStatus(false);
+      updateAwarenessInfo();
+    });
+    
+    // 로그 시작
+    log('페이지 로드됨. 연결 버튼을 눌러 시작하세요.');
+  </script>
+</body>
+</html>

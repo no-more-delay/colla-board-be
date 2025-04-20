@@ -1,21 +1,13 @@
 package nomoredelay.server.collaboard.repository
 
-// TODO: Implement R2DBC-based storage operations
-//  - Setup R2DBC connection and configuration
-//  - Implement reactive database operations
-//  - Optimize query performance
+import nomoredelay.server.collaboard.model.Document
+import org.springframework.data.r2dbc.repository.R2dbcRepository
+import org.springframework.stereotype.Repository
+import reactor.core.publisher.Flux
+import reactor.core.publisher.Mono
 
-// TODO: Implement version management storage
-//  - Store document versions efficiently
-//  - Implement version diff storage
-//  - Handle version metadata
-
-// TODO: Add search functionality
-//  - Implement full-text search
-//  - Add index optimization
-//  - Support filtering and sorting
-
-// TODO: Add caching layer
-//  - Implement Redis caching
-//  - Cache invalidation strategy
-//  - Performance monitoring
+@Repository
+interface DocumentRepository : R2dbcRepository<Document, String> {
+    fun findByTitle(title: String): Mono<Document>
+    fun findAllByCreatedBy(userId: String): Flux<Document>
+}

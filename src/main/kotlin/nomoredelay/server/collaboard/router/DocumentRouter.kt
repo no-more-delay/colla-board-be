@@ -1,26 +1,25 @@
 package nomoredelay.server.collaboard.router
 
-// TODO: Define REST endpoints
-//  - Document CRUD endpoints
-//  - Batch operation endpoints
-//  - Search and filter endpoints
+import nomoredelay.server.collaboard.handler.DocumentHandler
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.http.MediaType
+import org.springframework.web.reactive.function.server.RouterFunction
+import org.springframework.web.reactive.function.server.ServerResponse
+import org.springframework.web.reactive.function.server.router
 
-// TODO: Implement security filters
-//  - Authentication filter
-//  - Authorization filter
-//  - Rate limiting filter
-
-// TODO: Setup API versioning
-//  - Version routing
-//  - Deprecation handling
-//  - Backward compatibility
-
-// TODO: Add request validation
-//  - Input validation
-//  - Parameter validation
-//  - Content type validation
-
-// TODO: Implement error handling
-//  - Global error handling
-//  - Custom error responses
-//  - Error logging
+@Configuration
+class DocumentRouter {
+    @Bean
+    fun documentRoutes(handler: DocumentHandler): RouterFunction<ServerResponse> = router {
+        "/api/documents".nest {
+            accept(MediaType.APPLICATION_JSON).nest {
+                GET("", handler::getAllDocuments)
+                POST("", handler::createDocument)
+                GET("/{id}", handler::getDocument)
+                PUT("/{id}", handler::updateDocument)
+                DELETE("/{id}", handler::deleteDocument)
+            }
+        }
+    }
+}
