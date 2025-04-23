@@ -1,56 +1,73 @@
 package nomoredelay.server.collaboard.handler
 
 import nomoredelay.server.collaboard.model.Document
-import org.springframework.http.MediaType
+import nomoredelay.server.collaboard.service.DocumentService
 import org.springframework.stereotype.Component
+import org.springframework.web.reactive.function.BodyInserters
 import org.springframework.web.reactive.function.server.ServerRequest
 import org.springframework.web.reactive.function.server.ServerResponse
-import reactor.core.publisher.Flux
+import org.springframework.web.reactive.function.server.bodyToMono
 import reactor.core.publisher.Mono
-import java.time.Duration
 
-// TODO: Implement Document CRUD operations
-//  - Create new document with initial metadata
-//  - Read document with version history
-//  - Update document content and metadata
-//  - Delete document with proper cleanup
 @Component
-class DocumentHandler {
-    private fun getMockedDocument(id: Any): Document =
-        Document(
-            id = id.toString(),
-            title = "Sample Document",
-            content = "This is a sample document content.",
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis(),
-            version = 1,
-        )
-
-    fun findAllDocuments(serverRequest: ServerRequest): Mono<ServerResponse> {
-        val result =
-            Flux
-                .fromIterable(1..10)
-                .delayElements(Duration.ofMillis(100))
-                .map { getMockedDocument(it) }
-
-        return ServerResponse
-            .ok()
-            .contentType(MediaType.TEXT_EVENT_STREAM)
-            .body(result, Document::class.java)
+class DocumentHandler(private val documentService: DocumentService) {
+    fun getAllDocuments(request: ServerRequest): Mono<ServerResponse> {
+        val userId = request.queryParam("userId").orElse(null)
+        
+        return if (userId != null) {
+            documentService.getUserDocuments(userId)
+                .collectList()
+                .flatMap { documents ->
+                    ServerResponse.ok().bodyValue(documents)
+                }
+        } else {
+            documentService.getAllDocuments()
+                .collectList()
+                .flatMap { documents ->
+                    ServerResponse.ok().bodyValue(documents)
+                }
+        }
     }
+    
+    fun getDocument(request: ServerRequest): Mono<ServerResponse> {
+        val id = request.pathVariable("id")
+        return documentService.getDocument(id)
+            .flatMap { document ->
+                ServerResponse.ok().bodyValue(document)
+            }
+            .switchIfEmpty(ServerResponse.notFound().build())
+    }
+    
+    fun createDocument(request: ServerRequest): Mono<ServerResponse> {
+        return request.bodyToMono(DocumentRequest::class.java)
+            .flatMap { req ->
+                documentService.createDocument(req.title, req.userId)
+            }
+            .flatMap { document ->
+                ServerResponse.ok().bodyValue(document)
+            }
+    }
+    
+    fun updateDocument(request: ServerRequest): Mono<ServerResponse> {
+        val id = request.pathVariable("id")
+        return request.bodyToMono(DocumentRequest::class.java)
+            .flatMap { req ->
+                documentService.updateDocument(id, req.title)
+            }
+            .flatMap { document ->
+                ServerResponse.ok().bodyValue(document)
+            }
+            .switchIfEmpty(ServerResponse.notFound().build())
+    }
+    
+    fun deleteDocument(request: ServerRequest): Mono<ServerResponse> {
+        val id = request.pathVariable("id")
+        return documentService.deleteDocument(id)
+            .then(ServerResponse.noContent().build())
+    }
+    
+    data class DocumentRequest(
+        val title: String,
+        val userId: String
+    )
 }
-
-// TODO: Implement version management system
-//  - Track document versions
-//  - Handle concurrent edits
-//  - Implement rollback functionality
-
-// TODO: Add permission and access control
-//  - User role-based access control
-//  - Document sharing permissions
-//  - Collaboration invite system
-
-// TODO: Add validation and error handling
-//  - Input validation
-//  - Error response standardization
-//  - Rate limiting implementation
